@@ -87,7 +87,7 @@ def evaluate_company(financial_data):
     ebitda_coface = financial_data.get("Ebitda Coface")
     if ricavi is not None and ebitda_coface is not None and ricavi != 0:
         rapporto_fatturato_ebitda = ricavi / ebitda_coface
-        output += f"- Rapporto Fatturato / Ebitda Coface: {rapporto_fatturato_ebitda:.2f}\n"
+        output += f"- Fatturato / Ebitda Coface: {rapporto_fatturato_ebitda:.2f}\n"
         output += f"--> Questo significa che ogni 1000 euro non incassati, per bilanciare la perdita, bisogna fare nuovo fatturato per: {1000 * rapporto_fatturato_ebitda:.2f} euro\n"
 
     return output, percentages
