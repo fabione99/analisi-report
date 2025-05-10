@@ -2,9 +2,10 @@ import streamlit as st
 import fitz
 import re
 import matplotlib.pyplot as plt
+import io
+from weasyprint import HTML
 
 def extract_text_from_pdf(pdf_file):
-    """Estrae il testo da un PDF con gestione degli errori."""
     try:
         with fitz.open("pdf", pdf_file.read()) as doc:
             return "\n".join(page.get_text() for page in doc)
@@ -13,7 +14,6 @@ def extract_text_from_pdf(pdf_file):
         return None
 
 def find_value(labels, text):
-    """Trova un valore numerico dopo una o più label, gestendo formati diversi."""
     if not text:
         return None
     for label in labels:
@@ -28,7 +28,6 @@ def find_value(labels, text):
     return None
 
 def extract_financial_data(text):
-    """Estrae i dati finanziari chiave dal testo."""
     if not text:
         return None
     data = {
@@ -46,97 +45,101 @@ def extract_financial_data(text):
     return data
 
 def evaluate_company(financial_data):
-    """Genera un'analisi finanziaria e calcola le percentuali."""
     if not financial_data or not any(financial_data.values()):
         return "Dati finanziari non trovati o incompleti nel PDF.", {}
 
     ricavi = financial_data.get("Ricavi")
+    ebitda_coface = financial_data.get("Ebitda Coface")
+    rapporto_fatturato_ebitda = ricavi / ebitda_coface if ricavi and ebitda_coface else None
+
     percentages = {}
-
     for key, value in financial_data.items():
-        if key != "Ricavi" and value is not None and ricavi is not None and ricavi != 0:
-            percent = (value / ricavi) * 100
-            percentages[key] = percent
+        if key != "Ricavi" and value and ricavi:
+            percentages[key] = (value / ricavi) * 100
 
-    # Formattazione dell'output
-    output = ""
-    output += "Attivo:\n"
+    output = "Attivo:\n"
     for key in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]:
-        value = financial_data.get(key)
-        if value is not None:
-            output += f"- {key}: € {value:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+        val = financial_data.get(key)
+        if val is not None:
+            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
 
     output += "\nPassivo:\n"
     for key in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]:
-        value = financial_data.get(key)
-        if value is not None:
-            output += f"- {key}: € {value:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+        val = financial_data.get(key)
+        if val is not None:
+            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
 
     output += "\nAltri dati:\n"
     for key in ["Capitale circolante netto", "Ebitda Coface"]:
-        value = financial_data.get(key)
-        if value is not None:
-            output += f"- {key}: € {value:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+        val = financial_data.get(key)
+        if val is not None:
+            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
 
     output += "\nRapporti:\n"
-    crediti_clienti = financial_data.get("Crediti verso clienti")
-    if crediti_clienti is not None and ricavi is not None and ricavi != 0:
-        percent_crediti_fatturato = (crediti_clienti / ricavi) * 100
-        output += f"- Crediti verso clienti / Fatturato: {percent_crediti_fatturato:.2f}%\n"
-
-    ebitda_coface = financial_data.get("Ebitda Coface")
-    if ricavi is not None and ebitda_coface is not None and ricavi != 0:
-        rapporto_fatturato_ebitda = ricavi / ebitda_coface
+    cvc = financial_data.get("Crediti verso clienti")
+    if cvc and ricavi:
+        output += f"- Crediti verso clienti / Fatturato: {(cvc / ricavi) * 100:.2f}%\n"
+    if rapporto_fatturato_ebitda:
         output += f"- Fatturato / Ebitda Coface: {rapporto_fatturato_ebitda:.2f}\n"
-        output += f"--> Questo significa che ogni 1000 euro non incassati, per bilanciare la perdita, bisogna fare nuovo fatturato per: {1000 * rapporto_fatturato_ebitda:.2f} euro\n"
+        output += f"--> Ogni 1000€ non incassati, servono {1000 * rapporto_fatturato_ebitda:.2f}€ di nuovo fatturato per compensare\n"
 
-    return output, percentages
+    return output, percentages, rapporto_fatturato_ebitda
 
-def plot_chart(percentages, chart_type="pie", title=""):
-    """Crea un grafico a torta o a barre con estetica migliorata."""
-    labels = [k for k, v in percentages.items() if v is not None]
-    values = [v for v in percentages.values() if v is not None]
+def annotate_bars(ax, bars, value_type="percent"):
+    for bar in bars:
+        yval = bar.get_height()
+        if value_type == "euro":
+            label = f'€ {yval:,.2f}'
+        elif value_type == "percent":
+            label = f'{yval:.2f}%'
+        else:
+            label = f'{yval:.2f}'
+        ax.text(bar.get_x() + bar.get_width() / 2, yval, label, ha='center', va='bottom')
 
-    if not labels:
-        return None
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    if chart_type == "pie":
-        ax.pie(values, labels=labels, autopct="%1.1f%%", startangle=140, colors=plt.cm.Paired.colors)
-        ax.set_title(title, fontsize=14)
-    else:
-        ax.bar(labels, values, color=plt.cm.viridis.colors)
-        ax.set_ylabel("Percentuale rispetto ai ricavi", fontsize=12)
-        ax.set_title(title, fontsize=14)
+def plot_percent_bars(title, data):
+    labels = data.keys()
+    values = data.values()
+    if values:
+        fig, ax = plt.subplots()
+        bars = ax.bar(labels, values, color=plt.cm.viridis.colors)
+        ax.set_title(title)
+        ax.set_ylabel("Percentuale rispetto ai ricavi")
         plt.xticks(rotation=45, ha="right")
+        annotate_bars(ax, bars, "percent")
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
+
+def plot_aggregated_bar(percentages, financial_data):
+    attivo = sum(percentages.get(k, 0) for k in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"])
+    passivo = sum(percentages.get(k, 0) for k in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"])
+    ccn = financial_data.get("Capitale circolante netto", 0)
+    ricavi = financial_data.get("Ricavi", 1)
+    ccn_percent = (ccn / ricavi) * 100 if ricavi else 0
+
+    labels = ['Attivo', 'Passivo', 'Capitale Circolante Netto']
+    values = [attivo, passivo, ccn_percent]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    bars = ax.bar(labels, values, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
+    ax.set_ylabel("Percentuale rispetto ai ricavi")
+    ax.set_title("Confronto Attivo, Passivo e CCN")
+    annotate_bars(ax, bars, "percent")
     plt.tight_layout()
     return fig
 
-def plot_aggregated_bar(percentages, financial_data):
-    """Crea un grafico a barre aggregato per confrontare attivo, passivo e capitale circolante netto con valori numerici e spaziatura."""
-    attivo_sum = sum(percentages.get(k, 0) for k in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"])
-    passivo_sum = sum(percentages.get(k, 0) for k in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"])
-    capitale_circolante_netto = financial_data.get("Capitale circolante netto")
-    capitale_circolante_netto_percent = (capitale_circolante_netto / financial_data.get("Ricavi")) * 100 if capitale_circolante_netto is not None and financial_data.get("Ricavi") is not None and financial_data.get("Ricavi") != 0 else 0
-
-    labels = ['Attivo', 'Passivo', 'Capitale Circolante Netto']
-    values = [attivo_sum, passivo_sum, capitale_circolante_netto_percent]
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.bar(labels, values, color=['#1f77b4', '#ff7f0e', '#2ca02c'], width=0.6)
-
-    for bar in bars:
-        yval = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2, yval, round(yval, 2), ha='center', va='bottom')
-
-    ax.set_ylabel("Percentuale rispetto ai ricavi", fontsize=12)
-    ax.set_title("Confronto Attivo, Passivo e Capitale Circolante Netto", fontsize=14)
-    plt.xticks(labels)
+def plot_fatturato_ebitda_histogram(rapporto):
+    fig, ax = plt.subplots()
+    labels = ['Crediti non incassati', 'Fatturato necessario per compensare']
+    values = [1000, rapporto * 1000 if rapporto else 0]
+    bars = ax.bar(labels, values, color=['skyblue', 'lightcoral'])
+    ax.set_title("Impatto Economico dei Crediti non Incassati")
+    ax.set_ylabel("Importi (€)")
+    annotate_bars(ax, bars, "euro")
     plt.tight_layout()
     return fig
 
 def extract_report_header(text):
-    """Estrae le prime 50 parole del testo, escludendo le prime 14 e fermandosi dopo la Partita IVA."""
     if not text:
         return None
     words = text.split()
@@ -144,20 +147,39 @@ def extract_report_header(text):
     header = " ".join(header_words)
     match = re.search(r"Partita IVA[:\s]*([\d]+)", header, re.IGNORECASE)
     if match:
-        partita_iva_index = header.find(match.group(0))
-        return header[:partita_iva_index + len(match.group(0))]
+        idx = header.find(match.group(0))
+        return header[:idx + len(match.group(0))]
     return header
 
 def extract_partita_iva(text):
-    """Estrae la Partita IVA dal testo."""
     if not text:
         return None
     match = re.search(r"Partita IVA[:\s]*([\d]+)", text, re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
-    return None
+    return match.group(1).strip() if match else None
 
-st.title(" Analisi Finanziaria Prospect")
+def create_pdf_report_weasyprint(report_header, analysis, rapporto_fatturato_ebitda):
+    html_content = f"""
+    <html><head><style>
+        body {{ font-family: 'DejaVu Sans', sans-serif; font-size: 12pt; }}
+        h1 {{ font-size: 1.5em; }} h2 {{ font-size: 1.2em; }}
+        pre {{ white-space: pre-wrap; word-break: break-word; }}
+    </style></head><body>
+    <h1>Intestazione Report: {report_header}</h1>
+    <h2>Risultati Analisi Finanziaria</h2>
+    <pre>{analysis}</pre>
+    """
+    if rapporto_fatturato_ebitda:
+        html_content += f"""
+        <h2>Impatto Economico dei Crediti non Incassati</h2>
+        <p>{rapporto_fatturato_ebitda:.2f}</p>
+        <img src="fatturato_ebitda_hist.png" alt="Grafico">
+        """
+    html_content += "</body></html>"
+    pdf_buffer = HTML(string=html_content).write_pdf()
+    return io.BytesIO(pdf_buffer)
+
+# STREAMLIT APP
+st.title("Analisi Finanziaria Prospect")
 pdf_file = st.file_uploader("Carica il PDF", type=["pdf"])
 
 if st.button("Analizza"):
@@ -166,42 +188,46 @@ if st.button("Analizza"):
         if text:
             report_header = extract_report_header(text)
             financial_data = extract_financial_data(text)
-            analysis, percentages = evaluate_company(financial_data)
+            analysis, percentages, rapporto = evaluate_company(financial_data)
 
-            st.subheader(f"Intestazione Report: \n{report_header}")
-            st.subheader("Risultati Analisi Finanziaria")
-
+            st.subheader(f"Intestazione Report:\n{report_header}")
+            st.subheader("Risultati Analisi")
             st.write(analysis)
+
+            if rapporto:
+                fig_fatt_ebitda = plot_fatturato_ebitda_histogram(rapporto)
+                st.pyplot(fig_fatt_ebitda)
+                fig_fatt_ebitda.savefig("fatturato_ebitda_hist.png")
+
             if percentages:
                 st.subheader("Grafici Finanziari")
-                attivo_percentages = {k: v for k, v in percentages.items() if k in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]}
-                passivo_percentages = {k: v for k, v in percentages.items() if k in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]}
+                keys_attivo = ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]
+                keys_passivo = ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]
 
-                if attivo_percentages:
-                    st.pyplot(plot_chart(attivo_percentages, "pie", "Percentuale attivo rispetto ai ricavi"))
-                    st.pyplot(plot_chart(attivo_percentages, "bar", "Analisi attivo finanziario"))
+                attivo_percentages = {k: percentages[k] for k in keys_attivo if k in percentages}
+                passivo_percentages = {k: percentages[k] for k in keys_passivo if k in percentages}
 
-                if passivo_percentages:
-                    st.pyplot(plot_chart(passivo_percentages, "pie", "Percentuale passivo rispetto ai ricavi"))
-                    st.pyplot(plot_chart(passivo_percentages, "bar", "Analisi passivo finanziario"))
+                plot_percent_bars("Analisi Attivo Finanziario", attivo_percentages)
 
-                st.pyplot(plot_aggregated_bar(percentages, financial_data))
+                plot_percent_bars("Analisi Passivo Finanziario", passivo_percentages)
 
-                # Grafico di confronto fatturato, crediti verso clienti e capitale circolante netto con valori numerici.
-                if financial_data.get("Ricavi") is not None and financial_data.get("Crediti verso clienti") is not None and financial_data.get("Capitale circolante netto") is not None:
-                    fig_fatturato_crediti_ccn, ax_fatturato_crediti_ccn = plt.subplots()
-                    labels = ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]
-                    values = [financial_data["Ricavi"], financial_data["Crediti verso clienti"], financial_data["Capitale circolante netto"]]
-                    bars = ax_fatturato_crediti_ccn.bar(labels, values)
-                    ax_fatturato_crediti_ccn.set_title("Confronto Fatturato, Crediti verso clienti e Capitale circolante netto")
+                fig_agg = plot_aggregated_bar(percentages, financial_data)
+                st.pyplot(fig_agg)
+                plt.close(fig_agg)
 
-                    for bar in bars:
-                        yval = bar.get_height()
-                        ax_fatturato_crediti_ccn.text(bar.get_x() + bar.get_width() / 2, yval, f'€ {yval:,.2f}', ha='center', va='bottom')
-
-                    st.pyplot(fig_fatturato_crediti_ccn)
-
+                if all(financial_data.get(k) is not None for k in ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]):
+                    fig_confronto, ax_confronto = plt.subplots()
+                    labels_confronto = ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]
+                    values_confronto = [financial_data[k] for k in labels_confronto]
+                    bars_confronto = ax_confronto.bar(labels_confronto, values_confronto, color=plt.cm.viridis.colors)
+                    ax_confronto.set_title("Confronto Fatturato / Crediti Verso Clienti / CCN")
+                    ax_confronto.set_ylabel("Importi (€)")
+                    annotate_bars(ax_confronto, bars_confronto, "euro")
+                    plt.xticks(labels_confronto)
+                    plt.tight_layout()
+                    st.pyplot(fig_confronto)
+                    plt.close(fig_confronto)
         else:
-            st.warning("Dati insufficienti per i grafici.")
+            st.warning("Dati insufficienti per l'analisi.")
     else:
         st.error("Carica un PDF.")
