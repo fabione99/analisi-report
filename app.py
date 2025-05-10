@@ -3,6 +3,9 @@ import fitz
 import re
 import matplotlib.pyplot as plt
 import io
+import pandas as pd
+
+# --- FUNZIONI PDF ---
 
 def extract_text_from_pdf(pdf_file):
     try:
@@ -150,35 +153,12 @@ def extract_report_header(text):
         return header[:idx + len(match.group(0))]
     return header
 
-def extract_partita_iva(text):
-    if not text:
-        return None
-    match = re.search(r"Partita IVA[:\s]*([\d]+)", text, re.IGNORECASE)
-    return match.group(1).strip() if match else None
+# --- STREAMLIT PDF ---
 
-def create_pdf_report_weasyprint(report_header, analysis, rapporto_fatturato_ebitda):
-    html_content = f"""
-    <html><head><style>
-        body {{ font-family: 'DejaVu Sans', sans-serif; font-size: 12pt; }}
-        h1 {{ font-size: 1.5em; }} h2 {{ font-size: 1.2em; }}
-        pre {{ white-space: pre-wrap; word-break: break-word; }}
-    </style></head><body>
-    <h1>Intestazione Report: {report_header}</h1>
-    <h2>Risultati Analisi Finanziaria</h2>
-    <pre>{analysis}</pre>
-    """
-    if rapporto_fatturato_ebitda:
-        html_content += f"""
-        <h2>Impatto Economico dei Crediti non Incassati</h2>
-        <p>{rapporto_fatturato_ebitda:.2f}</p>
-        <img src="fatturato_ebitda_hist.png" alt="Grafico">
-        """
+st.title("📄 Analisi Finanziaria da PDF")
+pdf_file = st.file_uploader("Carica il PDF", type=["pdf"], key="pdf_uploader")
 
-# STREAMLIT APP
-st.title("Analisi Finanziaria Prospect")
-pdf_file = st.file_uploader("Carica il PDF", type=["pdf"])
-
-if st.button("Analizza"):
+if st.button("Analizza PDF"):
     if pdf_file:
         text = extract_text_from_pdf(pdf_file)
         if text:
@@ -204,7 +184,6 @@ if st.button("Analizza"):
                 passivo_percentages = {k: percentages[k] for k in keys_passivo if k in percentages}
 
                 plot_percent_bars("Analisi Attivo Finanziario", attivo_percentages)
-
                 plot_percent_bars("Analisi Passivo Finanziario", passivo_percentages)
 
                 fig_agg = plot_aggregated_bar(percentages, financial_data)
@@ -216,7 +195,7 @@ if st.button("Analizza"):
                     labels_confronto = ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]
                     values_confronto = [financial_data[k] for k in labels_confronto]
                     bars_confronto = ax_confronto.bar(labels_confronto, values_confronto, color=plt.cm.viridis.colors)
-                    ax_confronto.set_title("Confronto Fatturato / Crediti Verso Clienti / CCN")
+                    ax_confronto.set_title("Confronto Fatturato / Crediti / CCN")
                     ax_confronto.set_ylabel("Importi (€)")
                     annotate_bars(ax_confronto, bars_confronto, "euro")
                     plt.xticks(labels_confronto)
@@ -227,3 +206,53 @@ if st.button("Analizza"):
             st.warning("Dati insufficienti per l'analisi.")
     else:
         st.error("Carica un PDF.")
+
+# --- STREAMLIT EXCEL ---
+
+st.title("📊 Analisi Portafoglio da Excel")
+excel_file = st.file_uploader("Carica il file Excel", type=["xlsx"], key="excel_uploader")
+
+if st.button("Analizza Excel"):
+    if excel_file:
+        df = pd.read_excel(excel_file)
+        df.columns = df.columns.str.strip()
+
+        # Tabella 1
+        pivot1 = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count').rename(columns={'Ragione Sociale': 'Numero Aziende'})
+        st.subheader("1️⃣ Numero aziende per Livello di Rischio")
+        st.dataframe(pivot1)
+
+        # Tabella 2
+        pivot2 = df.pivot_table(index='Livello Rischio', columns='Late Payment Index', values='Ragione Sociale', aggfunc='count').fillna(0)
+        st.subheader("2️⃣ Aziende per Rischio e Late Payment Index")
+        st.dataframe(pivot2)
+
+        # Tabella 3
+        pivot3 = df.pivot_table(index='Livello Rischio', columns='Tipo Valutazione', values='Ragione Sociale', aggfunc='count').fillna(0)
+        st.subheader("3️⃣ Aziende per Rischio e Tipo di Valutazione")
+        st.dataframe(pivot3)
+
+        # Tabella 4
+        pivot4_count = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count').rename(columns={'Ragione Sociale': 'Numero Aziende'})
+        pivot4_sum = df.pivot_table(index='Livello Rischio', values='Advanced Opinion', aggfunc='sum')
+        pivot4 = pivot4_count.join(pivot4_sum)
+        st.subheader("4️⃣ Numero aziende e Totale Advanced Opinion per Rischio")
+        st.dataframe(pivot4)
+
+        # Esporta in Excel scaricabile
+        output_excel = io.BytesIO()
+        with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+            pivot1.to_excel(writer, sheet_name="Aziende per Rischio")
+            pivot2.to_excel(writer, sheet_name="Rischio vs LPI")
+            pivot3.to_excel(writer, sheet_name="Rischio vs Valutazione")
+            pivot4.to_excel(writer, sheet_name="Rischio + Adv Opinion")
+        output_excel.seek(0)
+
+        st.download_button(
+            label="📥 Scarica report Excel",
+            data=output_excel,
+            file_name="analisi_portafoglio.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("Carica prima un file Excel valido.")
