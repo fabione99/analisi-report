@@ -1,3 +1,6 @@
 streamlit
-pymupdf
+pandas
+openpyxl
 matplotlib
+PyMuPDF
+weasyprint
