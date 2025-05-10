@@ -3,7 +3,6 @@ import fitz
 import re
 import matplotlib.pyplot as plt
 import io
-from weasyprint import HTML
 
 def extract_text_from_pdf(pdf_file):
     try:
