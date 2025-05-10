@@ -173,9 +173,6 @@ def create_pdf_report_weasyprint(report_header, analysis, rapporto_fatturato_ebi
         <p>{rapporto_fatturato_ebitda:.2f}</p>
         <img src="fatturato_ebitda_hist.png" alt="Grafico">
         """
-    html_content += "</body></html>"
-    pdf_buffer = HTML(string=html_content).write_pdf()
-    return io.BytesIO(pdf_buffer)
 
 # STREAMLIT APP
 st.title("Analisi Finanziaria Prospect")
