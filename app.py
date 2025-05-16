@@ -90,12 +90,7 @@ def evaluate_company(financial_data):
 def annotate_bars(ax, bars, value_type="percent"):
     for bar in bars:
         yval = bar.get_height()
-        if value_type == "euro":
-            label = f'€ {yval:,.2f}'
-        elif value_type == "percent":
-            label = f'{yval:.2f}%'
-        else:
-            label = f'{yval:.2f}'
+        label = f'{yval:.2f}%' if value_type == "percent" else f'€ {yval:,.2f}'
         ax.text(bar.get_x() + bar.get_width() / 2, yval, label, ha='center', va='bottom')
 
 def plot_percent_bars(title, data):
@@ -173,7 +168,6 @@ if st.button("Analizza PDF"):
             if rapporto:
                 fig_fatt_ebitda = plot_fatturato_ebitda_histogram(rapporto)
                 st.pyplot(fig_fatt_ebitda)
-                fig_fatt_ebitda.savefig("fatturato_ebitda_hist.png")
 
             if percentages:
                 st.subheader("Grafici Finanziari")
@@ -188,7 +182,6 @@ if st.button("Analizza PDF"):
 
                 fig_agg = plot_aggregated_bar(percentages, financial_data)
                 st.pyplot(fig_agg)
-                plt.close(fig_agg)
 
                 if all(financial_data.get(k) is not None for k in ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]):
                     fig_confronto, ax_confronto = plt.subplots()
@@ -198,10 +191,8 @@ if st.button("Analizza PDF"):
                     ax_confronto.set_title("Confronto Fatturato / Crediti / CCN")
                     ax_confronto.set_ylabel("Importi (€)")
                     annotate_bars(ax_confronto, bars_confronto, "euro")
-                    plt.xticks(labels_confronto)
                     plt.tight_layout()
                     st.pyplot(fig_confronto)
-                    plt.close(fig_confronto)
         else:
             st.warning("Dati insufficienti per l'analisi.")
     else:
@@ -216,30 +207,28 @@ if st.button("Analizza Excel"):
     if excel_file:
         df = pd.read_excel(excel_file)
         df.columns = df.columns.str.strip()
+        df = df[df['Livello Rischio'].str.strip() != '0-Non disponibile']
 
-        # Tabella 1
-        pivot1 = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count').rename(columns={'Ragione Sociale': 'Numero Aziende'})
+        pivot1 = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count', margins=True, margins_name='Totale')
+        pivot1.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
+
+        pivot2 = df.pivot_table(index='Livello Rischio', columns='Late Payment Index', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
+        pivot3 = df.pivot_table(index='Livello Rischio', columns='Tipo Valutazione', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
+        pivot4 = df.pivot_table(index='Livello Rischio', values=['Ragione Sociale', 'Advanced Opinion'], aggfunc={'Ragione Sociale': 'count', 'Advanced Opinion': 'sum'}, margins=True, margins_name='Totale')
+        pivot4.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
+
         st.subheader("1️⃣ Numero aziende per Livello di Rischio")
         st.dataframe(pivot1)
 
-        # Tabella 2
-        pivot2 = df.pivot_table(index='Livello Rischio', columns='Late Payment Index', values='Ragione Sociale', aggfunc='count').fillna(0)
         st.subheader("2️⃣ Aziende per Rischio e Late Payment Index")
         st.dataframe(pivot2)
 
-        # Tabella 3
-        pivot3 = df.pivot_table(index='Livello Rischio', columns='Tipo Valutazione', values='Ragione Sociale', aggfunc='count').fillna(0)
         st.subheader("3️⃣ Aziende per Rischio e Tipo di Valutazione")
         st.dataframe(pivot3)
 
-        # Tabella 4
-        pivot4_count = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count').rename(columns={'Ragione Sociale': 'Numero Aziende'})
-        pivot4_sum = df.pivot_table(index='Livello Rischio', values='Advanced Opinion', aggfunc='sum')
-        pivot4 = pivot4_count.join(pivot4_sum)
         st.subheader("4️⃣ Numero aziende e Totale Advanced Opinion per Rischio")
         st.dataframe(pivot4)
 
-        # Esporta in Excel scaricabile
         output_excel = io.BytesIO()
         with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
             pivot1.to_excel(writer, sheet_name="Aziende per Rischio")
