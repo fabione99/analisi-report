@@ -291,7 +291,7 @@ if st.button("Analizza Excel"):
             pivot2_combined.to_excel(writer, sheet_name="Rischio vs LPI", float_format="%.2f")
             pivot3_combined.to_excel(writer, sheet_name="Rischio vs Valutazione", float_format="%.2f")
             pivot4.to_excel(writer, sheet_name="Rischio + Adv Opinion")
-            casi_critici[colonne_output].to_excel(writer, sheet_name="Casi Critici", index=False)
+            casi_critici[colonne_output].to_excel(writer, sheet_name="Possibili Casi Critici", index=False)
         output_excel.seek(0)
 
         st.download_button(
