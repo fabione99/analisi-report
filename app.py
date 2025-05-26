@@ -209,43 +209,35 @@ if st.button("Analizza Excel"):
         df.columns = df.columns.str.strip()
         df = df[df['Livello Rischio'].str.strip() != '0-Non disponibile']
 
-        # Calcolo del totale complessivo di Numero Aziende
         totale_numero_aziende = len(df)
 
-        # Pivot 1: Numero aziende per Livello di Rischio
         pivot1 = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count', margins=True, margins_name='Totale')
         pivot1.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
         pivot1['% sul Totale Aziende'] = (pivot1['Numero Aziende'] / totale_numero_aziende * 100).round(2).astype(str) + '%'
-        if '% sul Totale Aziende' in pivot1.columns and 'Totale' in pivot1.index:
+        if 'Totale' in pivot1.index:
             pivot1.loc['Totale', '% sul Totale Aziende'] = '100.00%'
 
-        # Pivot 2: Aziende per Rischio e Late Payment Index
         pivot2_count = df.pivot_table(index='Livello Rischio', columns='Late Payment Index', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
         pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + '%')
         pivot2_combined = pd.DataFrame()
         for col in pivot2_count.columns:
             pivot2_combined[col] = pivot2_count[col]
             pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
-        for col in pivot2_combined.columns:
-            if "(%)" in col and col == 'Totale (%)' and 'Totale' in pivot2_combined.index:
-                pivot2_combined.loc['Totale', col] = '100.00%'
+        if 'Totale (%)' in pivot2_combined.columns and 'Totale' in pivot2_combined.index:
+            pivot2_combined.loc['Totale', 'Totale (%)'] = '100.00%'
 
-        # Pivot 3: Aziende per Rischio e Tipo di Valutazione
         pivot3_count = df.pivot_table(index='Livello Rischio', columns='Tipo Valutazione', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
         pivot3_percent = pivot3_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + '%')
         pivot3_combined = pd.DataFrame()
         for col in pivot3_count.columns:
             pivot3_combined[col] = pivot3_count[col]
             pivot3_combined[f"{col} (%)"] = pivot3_percent[col]
-        for col in pivot3_combined.columns:
-            if "(%)" in col and col == 'Totale (%)' and 'Totale' in pivot3_combined.index:
-                pivot3_combined.loc['Totale', col] = '100.00%'
+        if 'Totale (%)' in pivot3_combined.columns and 'Totale' in pivot3_combined.index:
+            pivot3_combined.loc['Totale', 'Totale (%)'] = '100.00%'
 
-        # Pivot 4: Numero aziende e Totale Advanced Opinion per Rischio (senza %)
         pivot4 = df.pivot_table(index='Livello Rischio', values=['Ragione Sociale', 'Advanced Opinion'], aggfunc={'Ragione Sociale': 'count', 'Advanced Opinion': 'sum'}, margins=True, margins_name='Totale')
         pivot4.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
 
-        # Mostra tabelle
         st.subheader("1️⃣ Numero aziende per Livello di Rischio")
         st.dataframe(pivot1)
 
@@ -258,13 +250,48 @@ if st.button("Analizza Excel"):
         st.subheader("4️⃣ Numero aziende e Totale Advanced Opinion per Rischio")
         st.dataframe(pivot4)
 
-        # Download Excel
+        # --- ESTRAZIONE CASI CRITICI ---
+        st.subheader("🚨 Possibili Casi Critici")
+
+        livelli_critici = ['5-Alto', '6-Molto Alto']
+        lpi_critici = ['Elevata evidenza', 'Moderata evidenza']
+        tipo_valutazione_critica = ['2-Medio Intervento Umano', '3-Alto Intervento Umano']
+
+        casi_critici = df[
+            df['Livello Rischio'].isin(livelli_critici) &
+            df['Late Payment Index'].isin(lpi_critici) &
+            df['Tipo Valutazione'].isin(tipo_valutazione_critica)
+        ]
+
+        colonne_output = [
+            'Easynumber',
+            'Rif. Cliente',
+            'Ragione Sociale Validata',
+            'Livello Rischio',
+            'Late Payment Index',
+            'Tipo Valutazione',
+            'Segnalazioni Negative'
+        ]
+
+        # Ordina i casi critici secondo la priorità desiderata
+        livello_rischio_order = pd.CategoricalDtype(['6-Molto Alto', '5-Alto'], ordered=True)
+        lpi_order = pd.CategoricalDtype(['Elevata evidenza', 'Moderata evidenza'], ordered=True)
+
+        casi_critici['Livello Rischio'] = casi_critici['Livello Rischio'].astype(livello_rischio_order)
+        casi_critici['Late Payment Index'] = casi_critici['Late Payment Index'].astype(lpi_order)
+
+        casi_critici = casi_critici.sort_values(['Late Payment Index', 'Livello Rischio'])
+
+        # Mostra tabella ordinata
+        st.dataframe(casi_critici[colonne_output])
+
         output_excel = io.BytesIO()
         with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
             pivot1.to_excel(writer, sheet_name="Aziende per Rischio")
             pivot2_combined.to_excel(writer, sheet_name="Rischio vs LPI", float_format="%.2f")
             pivot3_combined.to_excel(writer, sheet_name="Rischio vs Valutazione", float_format="%.2f")
             pivot4.to_excel(writer, sheet_name="Rischio + Adv Opinion")
+            casi_critici[colonne_output].to_excel(writer, sheet_name="Casi Critici", index=False)
         output_excel.seek(0)
 
         st.download_button(
