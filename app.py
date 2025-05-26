@@ -235,8 +235,13 @@ if st.button("Analizza Excel"):
         if 'Totale (%)' in pivot3_combined.columns and 'Totale' in pivot3_combined.index:
             pivot3_combined.loc['Totale', 'Totale (%)'] = '100.00%'
 
-        pivot4 = df.pivot_table(index='Livello Rischio', values=['Ragione Sociale', 'Advanced Opinion'], aggfunc={'Ragione Sociale': 'count', 'Advanced Opinion': 'sum'}, margins=True, margins_name='Totale')
+        pivot4 = df.pivot_table(index='Livello Rischio', values=['Ragione Sociale', 'Advanced Opinion'],
+                                aggfunc={'Ragione Sociale': 'count', 'Advanced Opinion': 'sum'}, margins=True,
+                                margins_name='Totale')
         pivot4.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
+        # Riga modificata per formattare 'Advanced Opinion' in formato italiano (punto migliaia, virgola decimali)
+        pivot4['Advanced Opinion'] = pivot4['Advanced Opinion'].apply(lambda x: f"€ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+
 
         st.subheader("1️⃣ Numero aziende per Livello di Rischio")
         st.dataframe(pivot1)
