@@ -2,22 +2,298 @@ import streamlit as st
 import fitz
 import re
 import matplotlib.pyplot as plt
-import io
 import pandas as pd
+import io
 
-# --- FUNZIONI PDF ---
+# --- SELEZIONE LINGUA ---
+
+lang = st.selectbox(
+    "🌐 Seleziona la lingua / Select language / Selecciona idioma",
+    ["Italiano", "English", "Español"]
+)
+
+# --- TRADUZIONI ---
+
+translations = {
+    "Italiano": {
+        "title": "📄 Analisi Finanziaria da PDF",
+        "upload_pdf": "Carica il PDF",
+        "analyze": "Analizza PDF",
+        "error_pdf": "Errore durante la lettura del PDF",
+        "missing_data": "Dati insufficienti per l'analisi.",
+        "upload_prompt": "Carica un PDF.",
+        "header": "Intestazione Report",
+        "results": "Risultati Analisi",
+        "assets": "Attivo",
+        "liabilities": "Passivo",
+        "other_data": "Altri dati",
+        "ratios": "Rapporti",
+        "chart_assets": "Analisi Attivo Finanziario",
+        "chart_liabilities": "Analisi Passivo Finanziario",
+        "chart_summary": "Confronto Attivo, Passivo e CCN",
+        "chart_impact": "Impatto Economico dei Crediti non Incassati",
+        "chart_comparison": "Confronto Fatturato / Crediti / CCN",
+        "percent_revenue": "Percentuale rispetto ai ricavi",
+        "amounts_eur": "Importi (€)",
+        "per_1000_msg": "Ogni 1000€ non incassati, servono {amount:.2f}€ di nuovo fatturato per compensare",
+        "uncollected_label": "Crediti non incassati",
+        "revenue_needed_label": "Fatturato necessario per compensare",
+        "ccn_summary": "Confronto Attivo, Passivo e CCN",
+        "turnover_comparison": "Confronto Fatturato / Crediti / CCN",
+        "excel_title": "📊 Analisi Portafoglio da Excel",
+        "upload_excel": "Carica il file Excel",
+        "analyze_excel": "Analizza Excel",
+        "warning_upload_excel": "Carica prima un file Excel valido.",
+        "section_1": "1️⃣ Numero aziende per Livello di Rischio",
+        "section_2": "2️⃣ Aziende per Rischio e Late Payment Index",
+        "section_3": "3️⃣ Aziende per Rischio e Tipo di Valutazione",
+        "section_4": "4️⃣ Numero aziende e Totale Advanced Opinion per Rischio",
+        "section_critical": "🚨 Possibili Casi Critici",
+        "download_excel": "📥 Scarica report Excel",
+        "company_count": "Numero Aziende",
+        "percent_total": "% sul Totale Aziende",
+        "total": "Totale"
+
+    },
+    "English": {
+        "title": "📄 Financial Analysis from PDF",
+        "upload_pdf": "Upload PDF",
+        "analyze": "Analyze PDF",
+        "error_pdf": "Error while reading the PDF",
+        "missing_data": "Insufficient data for analysis.",
+        "upload_prompt": "Please upload a PDF.",
+        "header": "Report Header",
+        "results": "Analysis Results",
+        "assets": "Assets",
+        "liabilities": "Liabilities",
+        "other_data": "Other Data",
+        "ratios": "Ratios",
+        "chart_assets": "Asset Analysis",
+        "chart_liabilities": "Liability Analysis",
+        "chart_summary": "Comparison: Assets, Liabilities & NWC",
+        "chart_impact": "Economic Impact of Uncollected Receivables",
+        "chart_comparison": "Comparison: Revenue / Receivables / NWC",
+        "percent_revenue": "Percentage of Revenue",
+        "amounts_eur": "Amounts (€)",
+        "per_1000_msg": "For every €1000 uncollected, you need €{amount:.2f} in new revenue to compensate",
+        "uncollected_label": "Uncollected Receivables",
+        "revenue_needed_label": "Revenue Needed to Compensate",
+        "ccn_summary": "Comparison: Assets, Liabilities & Working Capital",
+        "turnover_comparison": "Comparison: Revenue / Receivables / NWC",
+        "excel_title": "📊 Portfolio Analysis from Excel",
+        "upload_excel": "Upload Excel file",
+        "analyze_excel": "Analyze Excel",
+        "warning_upload_excel": "Please upload a valid Excel file first.",
+        "section_1": "1️⃣ Number of Companies by Risk Level",
+        "section_2": "2️⃣ Companies by Risk and Late Payment Index",
+        "section_3": "3️⃣ Companies by Risk and Evaluation Type",
+        "section_4": "4️⃣ Number of Companies and Total Advanced Opinion by Risk",
+        "section_critical": "🚨 Potential Critical Cases",
+        "download_excel": "📥 Download Excel Report",
+        "company_count": "Number of Companies",
+        "percent_total": "% of Total Companies",
+        "total": "Total"
+
+
+    },
+    "Español": {
+        "title": "📄 Análisis Financiero desde PDF",
+        "upload_pdf": "Sube el PDF",
+        "analyze": "Analizar PDF",
+        "error_pdf": "Error al leer el PDF",
+        "missing_data": "Datos insuficientes para el análisis.",
+        "upload_prompt": "Por favor, sube un PDF.",
+        "header": "Encabezado del Informe",
+        "results": "Resultados del Análisis",
+        "assets": "Activos",
+        "liabilities": "Pasivos",
+        "other_data": "Otros Datos",
+        "ratios": "Ratios",
+        "chart_assets": "Análisis de Activos",
+        "chart_liabilities": "Análisis de Pasivos",
+        "chart_summary": "Resumen: Activos, Pasivos y CTN",
+        "chart_impact": "Impacto Económico de Créditos No Cobrados",
+        "chart_comparison": "Comparación: Ingresos / Créditos / CTN",
+        "percent_revenue": "Porcentaje sobre ingresos",
+        "amounts_eur": "Importes (€)",
+        "per_1000_msg": "Por cada €1000 no cobrados, se necesitan €{amount:.2f} de nuevos ingresos para compensar",
+        "uncollected_label": "Créditos no cobrados",
+        "revenue_needed_label": "Ingresos necesarios para compensar",
+        "ccn_summary": "Resumen: Activos, Pasivos y CTN",
+        "turnover_comparison": "Comparación: Ingresos / Créditos / CTN",
+        "excel_title": "📊 Análisis de Cartera desde Excel",
+        "upload_excel": "Sube el archivo Excel",
+        "analyze_excel": "Analizar Excel",
+        "warning_upload_excel": "Por favor, sube primero un archivo Excel válido.",
+        "section_1": "1️⃣ Número de empresas por Nivel de Riesgo",
+        "section_2": "2️⃣ Empresas por Riesgo e Índice de Morosidad",
+        "section_3": "3️⃣ Empresas por Riesgo y Tipo de Evaluación",
+        "section_4": "4️⃣ Número de empresas y Evaluación Avanzada total por Riesgo",
+        "section_critical": "🚨 Posibles Casos Críticos",
+        "download_excel": "📥 Descargar informe Excel",
+        "company_count": "Número de empresas",
+        "percent_total": "% del total de empresas",
+        "total": "Total"
+    }
+}
+
+
+
+excel_filename_by_lang = {
+    "Italiano": "analisi_portafoglio.xlsx",
+    "English": "portfolio_analysis.xlsx",
+    "Español": "análisis_cartera.xlsx"
+}
+
+field_labels = {
+    "Italiano": {
+        "Crediti verso clienti": "Crediti verso clienti",
+        "Rimanenze": "Rimanenze",
+        "Disponibilità liquide": "Disponibilità liquide",
+        "Altre attività correnti": "Altre attività correnti",
+        "Acconti / anticipi": "Acconti / anticipi",
+        "Debiti verso fornitori": "Debiti verso fornitori",
+        "Altri": "Altri",
+        "Ricavi": "Ricavi",
+        "Capitale circolante netto": "Capitale circolante netto",
+        "Ebitda Coface": "Ebitda Coface",
+    },
+    "English": {
+        "Crediti verso clienti": "Accounts Receivable",
+        "Rimanenze": "Stock",
+        "Disponibilità liquide": "Cash And Equivalent",
+        "Altre attività correnti": "Other Current Assets",
+        "Acconti / anticipi": "Advances Received For WIP",
+        "Debiti verso fornitori": "Accounts Payable",
+        "Altri": "Others",
+        "Ricavi": "Revenue",
+        "Capitale circolante netto": "Working Capital",
+        "Ebitda Coface": "Coface EBITDA",
+    },
+    "Español": {
+        "Crediti verso clienti": "Accounts Receivable",
+        "Rimanenze": "Stock",
+        "Disponibilità liquide": "Cash And Equivalent",
+        "Altre attività correnti": "Otros activos corrientes",
+        "Acconti / anticipi": "Advances Received For WIP",
+        "Debiti verso fornitori": "Accounts Payable",
+        "Altri": "Otros",
+        "Ricavi": "Ingresos",
+        "Capitale circolante netto": "Capital de trabajo neto",
+        "Ebitda Coface": "Ebitda Coface",
+    }
+}
+excel_column_names = {
+    "Italiano": {
+        "Easynumber": "Easynumber",
+        "Rif. Cliente": "Rif. Cliente",
+        "Ragione Sociale Validata": "Ragione Sociale Validata",
+        "Livello Rischio": "Livello Rischio",
+        "Late Payment Index": "Late Payment Index",
+        "Tipo Valutazione": "Tipo Valutazione",
+        "Segnalazioni Negative": "Segnalazioni Negative",
+        "Ragione Sociale": "Ragione Sociale",
+        "Advanced Opinion": "Advanced Opinion"
+    },
+    "English": {
+        "Easynumber": "Easynumber",
+        "Rif. Cliente": "Customer Ref.",
+        "Ragione Sociale Validata": "Verified Name",
+        "Livello Rischio": "Risk Level",
+        "Late Payment Index": "Late payment index",
+        "Tipo Valutazione": "Evaluation Type",
+        "Segnalazioni Negative": "Negative Events",
+        "Ragione Sociale": "Name",
+        "Advanced Opinion": "Advanced Opinion"
+    },
+    "Español": {
+        "Easynumber": "Easynumber",
+        "Rif. Cliente": "Referencia del Comprador",
+        "Ragione Sociale Validata": "Razón Social Verificada",
+        "Livello Rischio": "Nivel de Riesgo",
+        "Late Payment Index": "Late Payment Index",
+        "Tipo Valutazione": "Tipo de Evaluación",
+        "Segnalazioni Negative": "Información negativa",
+        "Ragione Sociale": "Razón Social",
+        "Advanced Opinion": "Evaluación Avanzada"
+    }
+}
+sheet_names = {
+    "Italiano": {
+        "pivot1": "Aziende per Rischio",
+        "pivot2": "Rischio vs LPI",
+        "pivot3": "Rischio vs Valutazione",
+        "pivot4": "Rischio + Adv Opinion",
+        "casi_critici": "Possibili Casi Critici"
+    },
+    "English": {
+        "pivot1": "Companies by Risk",
+        "pivot2": "Risk vs LPI",
+        "pivot3": "Risk vs Evaluation",
+        "pivot4": "Risk + Adv Opinion",
+        "casi_critici": "Potential Critical Cases"
+    },
+    "Español": {
+        "pivot1": "Empresas por Riesgo",
+        "pivot2": "Riesgo vs LPI",
+        "pivot3": "Riesgo vs Evaluación",
+        "pivot4": "Riesgo + Evaluación Avanzada",
+        "casi_critici": "Casos Críticos Potenciales"
+    }
+}
+excel_value_map = {
+    "Livello Rischio": {
+        "5-Alto": {
+            "Italiano": "5-Alto",
+            "English": "5-High Risk",
+            "Español": "5-Riesgo Alto"
+        },
+        "6-Molto Alto": {
+            "Italiano": "6-Molto Alto",
+            "English": "6-Very High Risk",
+            "Español": "6-Riesgo Muy Alto"
+        }
+    },
+    "Late Payment Index": {
+        "Moderata evidenza": {
+            "Italiano": "Moderata evidenza",
+            "English": "Keep track",
+            "Español": "Cierta información negativa"
+        },
+        "Elevata evidenza": {
+            "Italiano": "Elevata evidenza",
+            "English": "Warning",
+            "Español": "Información negativa considerable"
+        }
+    },
+    "Tipo Valutazione": {
+        "2-Medio Intervento Umano": {
+            "Italiano": "2-Medio Intervento Umano",
+            "English": "2-Medium Human Activity",
+            "Español": "2-Intervención Manual Media"
+        },
+        "3-Alto Intervento Umano": {
+            "Italiano": "3-Alto Intervento Umano",
+            "English": "3-High Human Activity",
+            "Español": "3-Intervención Manual Alta"
+        }
+    }
+}
+
+t = translations[lang]
+f = field_labels[lang]
+
+# --- FUNZIONI ---
 
 def extract_text_from_pdf(pdf_file):
     try:
         with fitz.open("pdf", pdf_file.read()) as doc:
             return "\n".join(page.get_text() for page in doc)
     except Exception as e:
-        st.error(f"Errore durante la lettura del PDF: {e}")
+        st.error(f"{t['error_pdf']}: {e}")
         return None
 
 def find_value(labels, text):
-    if not text:
-        return None
     for label in labels:
         match = re.search(fr"{label}[:\s]*([\d.,]+)", text, re.IGNORECASE)
         if match:
@@ -25,285 +301,337 @@ def find_value(labels, text):
             try:
                 return float(value_str)
             except ValueError:
-                st.warning(f"Valore non numerico trovato per '{label}': {match.group(1)}")
-            return None
+                return None
     return None
 
-def extract_financial_data(text):
-    if not text:
-        return None
-    data = {
-        "Crediti verso clienti": find_value(["Crediti verso clienti"], text),
-        "Rimanenze": find_value(["Rimanenze"], text),
-        "Disponibilità liquide": find_value(["Disponibilità liquide"], text),
-        "Altre attività correnti": find_value(["Altre attività correnti"], text),
-        "Acconti / anticipi": find_value(["Acconti / anticipi"], text),
-        "Debiti verso fornitori": find_value(["Debiti verso fornitori"], text),
-        "Altri": find_value(["Altri"], text),
-        "Ricavi": find_value(["Ricavi"], text),
-        "Capitale circolante netto": find_value(["Capitale circolante netto"], text),
-        "Ebitda Coface": find_value(["Ebitda Coface"], text),
+def extract_financial_data(text, language):
+    label_map = {
+        "Italiano": {
+            "Crediti verso clienti": ["Crediti verso clienti"],
+            "Rimanenze": ["Rimanenze"],
+            "Disponibilità liquide": ["Disponibilità liquide"],
+            "Altre attività correnti": ["Altre attività correnti"],
+            "Acconti / anticipi": ["Acconti / anticipi"],
+            "Debiti verso fornitori": ["Debiti verso fornitori"],
+            "Altri": ["Altri"],
+            "Ricavi": ["Ricavi"],
+            "Capitale circolante netto": ["Capitale circolante netto"],
+            "Ebitda Coface": ["Ebitda Coface"],
+        },
+        "English": {
+            "Crediti verso clienti": ["Accounts Receivable"],
+            "Rimanenze": ["Stock"],
+            "Disponibilità liquide": ["Cash And Equivalent"],
+            "Altre attività correnti": ["Other current assets"],
+            "Acconti / anticipi": ["Advances Received For WIP"],
+            "Debiti verso fornitori": ["Accounts Payable"],
+            "Altri": ["Others"],
+            "Ricavi": ["Turnover"],
+            "Capitale circolante netto": ["Working Capital"],
+            "Ebitda Coface": ["Ebitda Coface"],
+        },
+        "Español": {
+            "Crediti verso clienti": ["Accounts Receivable"],
+            "Rimanenze": ["Stock"],
+            "Disponibilità liquide": ["Cash And Equivalent"],
+            "Altre attività correnti": ["Otros activos corrientes"],
+            "Acconti / anticipi": ["Advances Received For WIP"],
+            "Debiti verso fornitori": ["Accounts Payable"],
+            "Altri": ["Otros"],
+            "Ricavi": ["Turnover"],
+            "Capitale circolante netto": ["Working Capital"],
+            "Ebitda Coface": ["Ebitda Coface"],
+        },
     }
-    return data
 
-def evaluate_company(financial_data):
-    if not financial_data or not any(financial_data.values()):
-        return "Dati finanziari non trovati o incompleti nel PDF.", {}
+    return {field: find_value(labels, text) for field, labels in label_map[language].items()}
 
-    ricavi = financial_data.get("Ricavi")
-    ebitda_coface = financial_data.get("Ebitda Coface")
-    rapporto_fatturato_ebitda = ricavi / ebitda_coface if ricavi and ebitda_coface else None
+def evaluate_company(data):
+    output = f"{t['assets']}:\n"
+    ricavi = data.get("Ricavi")
+    ebitda = data.get("Ebitda Coface")
+    rapporto = ricavi / ebitda if ricavi and ebitda else None
+    perc = {k: (v / ricavi * 100) for k, v in data.items() if k != "Ricavi" and v and ricavi}
 
-    percentages = {}
-    for key, value in financial_data.items():
-        if key != "Ricavi" and value and ricavi:
-            percentages[key] = (value / ricavi) * 100
+    for k in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]:
+        if data.get(k) is not None:
+            output += f"- {f[k]}: € {data[k]:,.2f} ({perc.get(k, 0):.2f}% {t['percent_revenue'].lower()})\n"
 
-    output = "Attivo:\n"
-    for key in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]:
-        val = financial_data.get(key)
-        if val is not None:
-            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+    output += f"\n{t['liabilities']}:\n"
+    for k in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]:
+        if data.get(k) is not None:
+            output += f"- {f[k]}: € {data[k]:,.2f} ({perc.get(k, 0):.2f}% {t['percent_revenue'].lower()})\n"
 
-    output += "\nPassivo:\n"
-    for key in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]:
-        val = financial_data.get(key)
-        if val is not None:
-            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+    output += f"\n{t['other_data']}:\n"
+    for k in ["Capitale circolante netto", "Ebitda Coface"]:
+        if data.get(k) is not None:
+            output += f"- {f[k]}: € {data[k]:,.2f} ({perc.get(k, 0):.2f}% {t['percent_revenue'].lower()})\n"
 
-    output += "\nAltri dati:\n"
-    for key in ["Capitale circolante netto", "Ebitda Coface"]:
-        val = financial_data.get(key)
-        if val is not None:
-            output += f"- {key}: € {val:,.2f} ({percentages.get(key, 0):.2f}% dei ricavi)\n"
+    output += f"\n{t['ratios']}:\n"
+    if data.get("Crediti verso clienti") and ricavi:
+        output += f"- {f['Crediti verso clienti']} / {f['Ricavi']}: {(data['Crediti verso clienti'] / ricavi) * 100:.2f}%\n"
+    if rapporto:
+        output += f"- {f['Ricavi']} / {f['Ebitda Coface']}: {rapporto:.2f}\n"
+        output += f"--> {t['per_1000_msg'].format(amount=rapporto * 1000)}\n"
 
-    output += "\nRapporti:\n"
-    cvc = financial_data.get("Crediti verso clienti")
-    if cvc and ricavi:
-        output += f"- Crediti verso clienti / Fatturato: {(cvc / ricavi) * 100:.2f}%\n"
-    if rapporto_fatturato_ebitda:
-        output += f"- Fatturato / Ebitda Coface: {rapporto_fatturato_ebitda:.2f}\n"
-        output += f"--> Ogni 1000€ non incassati, servono {1000 * rapporto_fatturato_ebitda:.2f}€ di nuovo fatturato per compensare\n"
-
-    return output, percentages, rapporto_fatturato_ebitda
-
-def annotate_bars(ax, bars, value_type="percent"):
-    for bar in bars:
-        yval = bar.get_height()
-        label = f'{yval:.2f}%' if value_type == "percent" else f'€ {yval:,.2f}'
-        ax.text(bar.get_x() + bar.get_width() / 2, yval, label, ha='center', va='bottom')
+    return output, perc, rapporto
 
 def plot_percent_bars(title, data):
-    labels = data.keys()
-    values = data.values()
-    if values:
-        fig, ax = plt.subplots()
-        bars = ax.bar(labels, values, color=plt.cm.viridis.colors)
-        ax.set_title(title)
-        ax.set_ylabel("Percentuale rispetto ai ricavi")
-        plt.xticks(rotation=45, ha="right")
-        annotate_bars(ax, bars, "percent")
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+    fig, ax = plt.subplots()
+    labels = [f[k] for k in data.keys()]
+    bars = ax.bar(labels, data.values())
+    ax.set_title(title)
+    ax.set_ylabel(t["percent_revenue"])
+    plt.xticks(rotation=45)
+    for bar in bars:
+        y = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}%", ha='center', va='bottom')
+    st.pyplot(fig)
 
-def plot_aggregated_bar(percentages, financial_data):
+def plot_impact_chart(rapporto):
+    fig, ax = plt.subplots()
+    labels = [t["uncollected_label"], t["revenue_needed_label"]]
+    values = [1000, rapporto * 1000]
+    bars = ax.bar(labels, values)
+    ax.set_title(t["chart_impact"])
+    ax.set_ylabel(t["amounts_eur"])
+    for bar in bars:
+        y = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, y, f"€ {y:,.2f}", ha='center', va='bottom')
+    plt.tight_layout()
+    st.pyplot(fig)
+
+def plot_summary_chart(percentages, data):
     attivo = sum(percentages.get(k, 0) for k in ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"])
     passivo = sum(percentages.get(k, 0) for k in ["Acconti / anticipi", "Debiti verso fornitori", "Altri"])
-    ccn = financial_data.get("Capitale circolante netto", 0)
-    ricavi = financial_data.get("Ricavi", 1)
+    ricavi = data.get("Ricavi", 1)
+    ccn = data.get("Capitale circolante netto", 0)
     ccn_percent = (ccn / ricavi) * 100 if ricavi else 0
 
-    labels = ['Attivo', 'Passivo', 'Capitale Circolante Netto']
+    labels = [t["assets"], t["liabilities"], f["Capitale circolante netto"]]
     values = [attivo, passivo, ccn_percent]
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    bars = ax.bar(labels, values, color=['#1f77b4', '#ff7f0e', '#2ca02c'])
-    ax.set_ylabel("Percentuale rispetto ai ricavi")
-    ax.set_title("Confronto Attivo, Passivo e CCN")
-    annotate_bars(ax, bars, "percent")
-    plt.tight_layout()
-    return fig
-
-def plot_fatturato_ebitda_histogram(rapporto):
     fig, ax = plt.subplots()
-    labels = ['Crediti non incassati', 'Fatturato necessario per compensare']
-    values = [1000, rapporto * 1000 if rapporto else 0]
-    bars = ax.bar(labels, values, color=['skyblue', 'lightcoral'])
-    ax.set_title("Impatto Economico dei Crediti non Incassati")
-    ax.set_ylabel("Importi (€)")
-    annotate_bars(ax, bars, "euro")
+    bars = ax.bar(labels, values)
+    ax.set_title(t["ccn_summary"])
+    ax.set_ylabel(t["percent_revenue"])
+    for bar in bars:
+        y = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}%", ha='center', va='bottom')
     plt.tight_layout()
-    return fig
+    st.pyplot(fig)
+
+def plot_turnover_comparison_chart(data):
+    fig, ax = plt.subplots()
+    labels = [f["Ricavi"], f["Crediti verso clienti"], f["Capitale circolante netto"]]
+    values = [data.get("Ricavi", 0), data.get("Crediti verso clienti", 0), data.get("Capitale circolante netto", 0)]
+    bars = ax.bar(labels, values)
+    ax.set_title(t["chart_comparison"])
+    ax.set_ylabel(t["amounts_eur"])
+    for bar in bars:
+        y = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, y, f"€ {y:,.2f}", ha='center', va='bottom')
+    plt.tight_layout()
+    st.pyplot(fig)
 
 def extract_report_header(text):
-    if not text:
-        return None
     words = text.split()
-    header_words = words[14:64]
-    header = " ".join(header_words)
+    header = " ".join(words[14:64])
     match = re.search(r"Partita IVA[:\s]*([\d]+)", header, re.IGNORECASE)
-    if match:
-        idx = header.find(match.group(0))
-        return header[:idx + len(match.group(0))]
-    return header
+    return header[:header.find(match.group(0)) + len(match.group(0))] if match else header
 
-# --- STREAMLIT PDF ---
+def translate_excel_values(df, lang):
+    # Traduce i valori per Livello Rischio, Late Payment Index e Tipo Valutazione
+    for col in ["Livello Rischio", "Late Payment Index", "Tipo Valutazione"]:
+        if col in df.columns:
+            df[col] = df[col].apply(lambda val: excel_value_map[col].get(val, {}).get(lang, val))
+    return df
 
-st.title("📄 Analisi Finanziaria da PDF")
-pdf_file = st.file_uploader("Carica il PDF", type=["pdf"], key="pdf_uploader")
+# --- UI ---
 
-if st.button("Analizza PDF"):
+st.title(t["title"])
+
+pdf_file = st.file_uploader(t['upload_pdf'], type=["pdf"], key="pdf_uploader")
+
+if st.button(t['analyze']):
     if pdf_file:
         text = extract_text_from_pdf(pdf_file)
         if text:
-            report_header = extract_report_header(text)
-            financial_data = extract_financial_data(text)
-            analysis, percentages, rapporto = evaluate_company(financial_data)
+            header = extract_report_header(text)
+            data = extract_financial_data(text, lang)
+            analysis, perc, rapporto = evaluate_company(data)
 
-            st.subheader(f"Intestazione Report:\n{report_header}")
-            st.subheader("Risultati Analisi")
+            st.subheader(f"{t['header']}:\n{header}")
+            st.subheader(t["results"])
             st.write(analysis)
 
             if rapporto:
-                fig_fatt_ebitda = plot_fatturato_ebitda_histogram(rapporto)
-                st.pyplot(fig_fatt_ebitda)
+                plot_impact_chart(rapporto)
+            if perc:
+                attivo_keys = ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]
+                passivo_keys = ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]
 
-            if percentages:
-                st.subheader("Grafici Finanziari")
-                keys_attivo = ["Crediti verso clienti", "Rimanenze", "Disponibilità liquide", "Altre attività correnti"]
-                keys_passivo = ["Acconti / anticipi", "Debiti verso fornitori", "Altri"]
+                attivo_data = {k: perc[k] for k in attivo_keys if k in perc}
+                passivo_data = {k: perc[k] for k in passivo_keys if k in perc}
 
-                attivo_percentages = {k: percentages[k] for k in keys_attivo if k in percentages}
-                passivo_percentages = {k: percentages[k] for k in keys_passivo if k in percentages}
-
-                plot_percent_bars("Analisi Attivo Finanziario", attivo_percentages)
-                plot_percent_bars("Analisi Passivo Finanziario", passivo_percentages)
-
-                fig_agg = plot_aggregated_bar(percentages, financial_data)
-                st.pyplot(fig_agg)
-
-                if all(financial_data.get(k) is not None for k in ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]):
-                    fig_confronto, ax_confronto = plt.subplots()
-                    labels_confronto = ["Ricavi", "Crediti verso clienti", "Capitale circolante netto"]
-                    values_confronto = [financial_data[k] for k in labels_confronto]
-                    bars_confronto = ax_confronto.bar(labels_confronto, values_confronto, color=plt.cm.viridis.colors)
-                    ax_confronto.set_title("Confronto Fatturato / Crediti / CCN")
-                    ax_confronto.set_ylabel("Importi (€)")
-                    annotate_bars(ax_confronto, bars_confronto, "euro")
-                    plt.tight_layout()
-                    st.pyplot(fig_confronto)
+                plot_percent_bars(t["chart_assets"], attivo_data)
+                plot_percent_bars(t["chart_liabilities"], passivo_data)
+                plot_summary_chart(perc, data)
+                plot_turnover_comparison_chart(data)
         else:
-            st.warning("Dati insufficienti per l'analisi.")
+            st.warning(t['missing_data'])
     else:
-        st.error("Carica un PDF.")
+        st.error(t['upload_prompt'])
 
 # --- STREAMLIT EXCEL ---
+# --- STREAMLIT EXCEL ---
 
-st.title("📊 Analisi Portafoglio da Excel")
-excel_file = st.file_uploader("Carica il file Excel", type=["xlsx"], key="excel_uploader")
+st.title(t["excel_title"])
+excel_file = st.file_uploader(t["upload_excel"], type=["xlsx"], key="excel_uploader")
 
-if st.button("Analizza Excel"):
+if st.button(t["analyze_excel"]):
     if excel_file:
         df = pd.read_excel(excel_file)
         df.columns = df.columns.str.strip()
-        df = df[df['Livello Rischio'].str.strip() != '0-Non disponibile']
+
+        col_map = excel_column_names[lang]
+        sheet_map = sheet_names[lang]
+        rischio_col = col_map["Livello Rischio"]
+
+        if rischio_col not in df.columns:
+            st.error(f"Colonna '{rischio_col}' non trovata nel file.")
+            st.stop()
+
+        # Filtra righe senza rischio valido
+        df = df[df[rischio_col].fillna("").astype(str).str.strip() != ""]
+        df = df[df[rischio_col].astype(str).str.strip() != "0-Non disponibile"]
 
         totale_numero_aziende = len(df)
 
-        pivot1 = df.pivot_table(index='Livello Rischio', values='Ragione Sociale', aggfunc='count', margins=True, margins_name='Totale')
-        pivot1.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
-        pivot1['% sul Totale Aziende'] = (pivot1['Numero Aziende'] / totale_numero_aziende * 100).round(2).astype(str) + '%'
-        if 'Totale' in pivot1.index:
-            pivot1.loc['Totale', '% sul Totale Aziende'] = '100.00%'
+        # Pivot 1
+        pivot1 = df.pivot_table(
+            index=rischio_col,
+            values=col_map["Ragione Sociale"],
+            aggfunc='count',
+            margins=True,
+            margins_name=t["total"]
+        )
+        pivot1.rename(columns={col_map["Ragione Sociale"]: t["company_count"]}, inplace=True)
+        pivot1[t["percent_total"]] = (pivot1[t["company_count"]] / totale_numero_aziende * 100).round(2).astype(str) + '%'
+        if t["total"] in pivot1.index:
+            pivot1.loc[t["total"], t["percent_total"]] = "100.00%"
 
-        pivot2_count = df.pivot_table(index='Livello Rischio', columns='Late Payment Index', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
-        pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + '%')
+        # Pivot 2
+        pivot2_count = df.pivot_table(
+            index=rischio_col,
+            columns=col_map["Late Payment Index"],
+            values=col_map["Ragione Sociale"],
+            aggfunc='count',
+            fill_value=0,
+            margins=True,
+            margins_name=t["total"]
+        )
+        pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
         pivot2_combined = pd.DataFrame()
         for col in pivot2_count.columns:
             pivot2_combined[col] = pivot2_count[col]
             pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
-        if 'Totale (%)' in pivot2_combined.columns and 'Totale' in pivot2_combined.index:
-            pivot2_combined.loc['Totale', 'Totale (%)'] = '100.00%'
+        if t["total"] in pivot2_combined.index:
+            for col in pivot2_count.columns:
+                pivot2_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
 
-        pivot3_count = df.pivot_table(index='Livello Rischio', columns='Tipo Valutazione', values='Ragione Sociale', aggfunc='count', fill_value=0, margins=True, margins_name='Totale')
-        pivot3_percent = pivot3_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + '%')
+        # Pivot 3
+        pivot3_count = df.pivot_table(
+            index=rischio_col,
+            columns=col_map["Tipo Valutazione"],
+            values=col_map["Ragione Sociale"],
+            aggfunc='count',
+            fill_value=0,
+            margins=True,
+            margins_name=t["total"]
+        )
+        pivot3_percent = pivot3_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
         pivot3_combined = pd.DataFrame()
         for col in pivot3_count.columns:
             pivot3_combined[col] = pivot3_count[col]
             pivot3_combined[f"{col} (%)"] = pivot3_percent[col]
-        if 'Totale (%)' in pivot3_combined.columns and 'Totale' in pivot3_combined.index:
-            pivot3_combined.loc['Totale', 'Totale (%)'] = '100.00%'
+        if t["total"] in pivot3_combined.index:
+            for col in pivot3_count.columns:
+                pivot3_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
 
-        pivot4 = df.pivot_table(index='Livello Rischio', values=['Ragione Sociale', 'Advanced Opinion'],
-                                aggfunc={'Ragione Sociale': 'count', 'Advanced Opinion': 'sum'}, margins=True,
-                                margins_name='Totale')
-        pivot4.rename(columns={'Ragione Sociale': 'Numero Aziende'}, inplace=True)
-        # Riga modificata per formattare 'Advanced Opinion' in formato italiano (punto migliaia, virgola decimali)
-        pivot4['Advanced Opinion'] = pivot4['Advanced Opinion'].apply(lambda x: f"€ {x:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'))
+        # Pivot 4
+        pivot4 = df.pivot_table(
+            index=rischio_col,
+            values=[col_map["Ragione Sociale"], col_map["Advanced Opinion"]],
+            aggfunc={col_map["Ragione Sociale"]: "count", col_map["Advanced Opinion"]: "sum"},
+            margins=True,
+            margins_name=t["total"]
+        )
+        pivot4.rename(columns={col_map["Ragione Sociale"]: t["company_count"]}, inplace=True)
+        pivot4[col_map["Advanced Opinion"]] = pivot4[col_map["Advanced Opinion"]].apply(
+            lambda x: f"€ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
 
-
-        st.subheader("1️⃣ Numero aziende per Livello di Rischio")
+        # Visualizzazione
+        st.subheader(t["section_1"])
         st.dataframe(pivot1)
 
-        st.subheader("2️⃣ Aziende per Rischio e Late Payment Index")
+        st.subheader(t["section_2"])
         st.dataframe(pivot2_combined)
 
-        st.subheader("3️⃣ Aziende per Rischio e Tipo di Valutazione")
+        st.subheader(t["section_3"])
         st.dataframe(pivot3_combined)
 
-        st.subheader("4️⃣ Numero aziende e Totale Advanced Opinion per Rischio")
+        st.subheader(t["section_4"])
         st.dataframe(pivot4)
 
-        # --- ESTRAZIONE CASI CRITICI ---
-        st.subheader("🚨 Possibili Casi Critici")
+        st.subheader(t["section_critical"])
 
-        livelli_critici = ['5-Alto', '6-Molto Alto']
-        lpi_critici = ['Elevata evidenza', 'Moderata evidenza']
-        tipo_valutazione_critica = ['2-Medio Intervento Umano', '3-Alto Intervento Umano']
+        livelli_critici = [excel_value_map["Livello Rischio"][k][lang] for k in ["5-Alto", "6-Molto Alto"]]
+        lpi_critici = [excel_value_map["Late Payment Index"][k][lang] for k in
+                       ["Elevata evidenza", "Moderata evidenza"]]
+        tipo_valutazione_critica = [excel_value_map["Tipo Valutazione"][k][lang] for k in
+                                    ["2-Medio Intervento Umano", "3-Alto Intervento Umano"]]
 
         casi_critici = df[
-            df['Livello Rischio'].isin(livelli_critici) &
-            df['Late Payment Index'].isin(lpi_critici) &
-            df['Tipo Valutazione'].isin(tipo_valutazione_critica)
-        ]
+            df[rischio_col].isin(livelli_critici) &
+            df[col_map["Late Payment Index"]].isin(lpi_critici) &
+            df[col_map["Tipo Valutazione"]].isin(tipo_valutazione_critica)
+            ]
+
+        # Ordina per Late Payment Index
+        lpi_order = [excel_value_map["Late Payment Index"][k][lang] for k in ["Elevata evidenza", "Moderata evidenza"]]
+        casi_critici["_lpi_order"] = casi_critici[col_map["Late Payment Index"]].apply(
+            lambda x: lpi_order.index(x) if x in lpi_order else 99)
+        casi_critici = casi_critici.sort_values("_lpi_order").drop(columns="_lpi_order")
 
         colonne_output = [
-            'Easynumber',
-            'Rif. Cliente',
-            'Ragione Sociale Validata',
-            'Livello Rischio',
-            'Late Payment Index',
-            'Tipo Valutazione',
-            'Segnalazioni Negative'
+            col_map["Easynumber"],
+            col_map["Rif. Cliente"],
+            col_map["Ragione Sociale Validata"],
+            col_map["Livello Rischio"],
+            col_map["Late Payment Index"],
+            col_map["Tipo Valutazione"],
+            col_map["Segnalazioni Negative"]
         ]
 
-        # Ordina i casi critici secondo la priorità desiderata
-        livello_rischio_order = pd.CategoricalDtype(['6-Molto Alto', '5-Alto'], ordered=True)
-        lpi_order = pd.CategoricalDtype(['Elevata evidenza', 'Moderata evidenza'], ordered=True)
-
-        casi_critici['Livello Rischio'] = casi_critici['Livello Rischio'].astype(livello_rischio_order)
-        casi_critici['Late Payment Index'] = casi_critici['Late Payment Index'].astype(lpi_order)
-
-        casi_critici = casi_critici.sort_values(['Late Payment Index', 'Livello Rischio'])
-
-        # Mostra tabella ordinata
         st.dataframe(casi_critici[colonne_output])
 
+        # Output Excel con fogli tradotti
         output_excel = io.BytesIO()
-        with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
-            pivot1.to_excel(writer, sheet_name="Aziende per Rischio")
-            pivot2_combined.to_excel(writer, sheet_name="Rischio vs LPI", float_format="%.2f")
-            pivot3_combined.to_excel(writer, sheet_name="Rischio vs Valutazione", float_format="%.2f")
-            pivot4.to_excel(writer, sheet_name="Rischio + Adv Opinion")
-            casi_critici[colonne_output].to_excel(writer, sheet_name="Possibili Casi Critici", index=False)
+        with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
+            pivot1.to_excel(writer, sheet_name=sheet_map["pivot1"])
+            pivot2_combined.to_excel(writer, sheet_name=sheet_map["pivot2"])
+            pivot3_combined.to_excel(writer, sheet_name=sheet_map["pivot3"])
+            pivot4.to_excel(writer, sheet_name=sheet_map["pivot4"])
+            casi_critici[colonne_output].to_excel(writer, sheet_name=sheet_map["casi_critici"], index=False)
         output_excel.seek(0)
 
         st.download_button(
-            label="📥 Scarica report Excel",
+            label=t["download_excel"],
             data=output_excel,
-            file_name="analisi_portafoglio.xlsx",
+            file_name=excel_filename_by_lang[lang],
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.warning("Carica prima un file Excel valido.")
+        st.warning(t["warning_upload_excel"])
