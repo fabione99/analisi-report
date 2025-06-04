@@ -541,9 +541,9 @@ if st.button(t["analyze_excel"]):
             margins_name=t["total"]
         )
         pivot1.rename(columns={col_map["Ragione Sociale"]: t["company_count"]}, inplace=True)
-        pivot1[t["percent_total"]] = (pivot1[t["company_count"]] / totale_numero_aziende * 100).round(2).astype(str) + '%'
+        pivot1[t["percent_total"]] = (pivot1[t["company_count"]] / totale_numero_aziende * 100).round(2).apply(lambda x: f"{x:.2f}".replace(".", ",") + '%')
         if t["total"] in pivot1.index:
-            pivot1.loc[t["total"], t["percent_total"]] = "100.00%"
+            pivot1.loc[t["total"], t["percent_total"]] = "100,00%"
 
         # Pivot 2
         pivot2_count = df.pivot_table(
@@ -555,10 +555,14 @@ if st.button(t["analyze_excel"]):
             margins=True,
             margins_name=t["total"]
         )
-        pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
-        # Ricostruisci pivot2_combined con ordine corretto delle colonne
+        pivot2_percent = pivot2_count.applymap(
+            lambda x: f"{(x / totale_numero_aziende * 100):.2f}".replace(".", ",") + "%")
+
+        # Ordine desiderato delle colonne (tradotte)
         lpi_order_keys = ["Elevata evidenza", "Moderata evidenza", "Nessuna evidenza"]
         lpi_order_translated = [excel_value_map["Late Payment Index"].get(k, {}).get(lang, k) for k in lpi_order_keys]
+
+        # Ricostruzione pivot2 con colonne ordinate e Totale/%
         pivot2_combined = pd.DataFrame()
 
         for col in lpi_order_translated:
@@ -566,11 +570,14 @@ if st.button(t["analyze_excel"]):
                 pivot2_combined[col] = pivot2_count[col]
                 pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
 
-        # Aggiungi Totale alla fine se esiste
-        if t["total"] in pivot2_count.index:
-            if t["total"] in pivot2_count.columns:
-                pivot2_combined[t["total"]] = pivot2_count[t["total"]]
-                pivot2_combined[f"{t['total']} (%)"] = pivot2_percent[t["total"]]
+        # ➕ Aggiungi Totale (colonna) come penultima e % come ultima
+        if t["total"] in pivot2_count.columns:
+            pivot2_combined[t["total"]] = pivot2_count[t["total"]]
+            pivot2_combined[f"{t['total']} (%)"] = pivot2_percent[t["total"]]
+
+        # ➕ Se presente la riga Totale, forza 100,00%
+        if t["total"] in pivot2_combined.index:
+            pivot2_combined.loc[t["total"], f"{t['total']} (%)"] = "100,00%"
 
         # Pivot 3
         pivot3_count = df.pivot_table(
@@ -582,14 +589,16 @@ if st.button(t["analyze_excel"]):
             margins=True,
             margins_name=t["total"]
         )
-        pivot3_percent = pivot3_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
+        pivot3_percent = pivot3_count.applymap(lambda x: f"{(x / totale_numero_aziende * 100):.2f}".replace(".", ",") + "%")
         pivot3_combined = pd.DataFrame()
         for col in pivot3_count.columns:
             pivot3_combined[col] = pivot3_count[col]
             pivot3_combined[f"{col} (%)"] = pivot3_percent[col]
         if t["total"] in pivot3_combined.index:
             for col in pivot3_count.columns:
-                pivot3_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
+                valore = pivot3_combined.loc[t["total"], col]
+                percentuale = (valore / totale_numero_aziende * 100)
+                pivot3_combined.loc[t["total"], f"{col} (%)"] = f"{percentuale:.2f}".replace(".", ",") + "%"
 
         # Pivot 4
         pivot4 = df.pivot_table(
