@@ -243,26 +243,6 @@ sheet_names = {
 }
 excel_value_map = {
     "Livello Rischio": {
-        "1-Molto Basso": {
-            "Italiano": "1-Molto Basso",
-            "English": "1-Very Low Risk",
-            "Español": "1-Riesgo Muy Bajo"
-        },
-        "2-Basso": {
-            "Italiano": "2-Basso",
-            "English": "2-Low Risk",
-            "Español": "2-Riesgo Bajo"
-        },
-        "3-Medio Basso": {
-            "Italiano": "3-Medio Basso",
-            "English": "3-Medium to Low Risk",
-            "Español": "3-Riesgo Medio Bajo"
-        },
-        "4-Medio Alto": {
-            "Italiano": "4-Medio Alto",
-            "English": "4-Medium to High Risk",
-            "Español": "4-Riesgo Medio Alto"
-        },
         "5-Alto": {
             "Italiano": "5-Alto",
             "English": "5-High Risk",
@@ -275,21 +255,16 @@ excel_value_map = {
         }
     },
     "Late Payment Index": {
-    "Moderata evidenza": {
-        "Italiano": "Moderata evidenza",
-        "English": "Keep track",
-        "Español": "Cierta información negativa"
-    },
-    "Elevata evidenza": {
-        "Italiano": "Elevata evidenza",
-        "English": "Warning",
-        "Español": "Información negativa considerable"
-    },
-    "Nessuna evidenza": {
-        "Italiano": "Nessuna evidenza",
-        "English": "No negative payment",
-        "Español": "Sin información negativa en pagos"
-    }
+        "Moderata evidenza": {
+            "Italiano": "Moderata evidenza",
+            "English": "Keep track",
+            "Español": "Cierta información negativa"
+        },
+        "Elevata evidenza": {
+            "Italiano": "Elevata evidenza",
+            "English": "Warning",
+            "Español": "Información negativa considerable"
+        }
     },
     "Tipo Valutazione": {
         "2-Medio Intervento Umano": {
@@ -509,6 +484,7 @@ if st.button(t['analyze']):
         st.error(t['upload_prompt'])
 
 # --- STREAMLIT EXCEL ---
+# --- STREAMLIT EXCEL ---
 
 st.title(t["excel_title"])
 excel_file = st.file_uploader(t["upload_excel"], type=["xlsx"], key="excel_uploader")
@@ -541,9 +517,9 @@ if st.button(t["analyze_excel"]):
             margins_name=t["total"]
         )
         pivot1.rename(columns={col_map["Ragione Sociale"]: t["company_count"]}, inplace=True)
-        pivot1[t["percent_total"]] = (pivot1[t["company_count"]] / totale_numero_aziende * 100).round(2).apply(lambda x: f"{x:.2f}".replace(".", ",") + '%')
+        pivot1[t["percent_total"]] = (pivot1[t["company_count"]] / totale_numero_aziende * 100).round(2).astype(str) + '%'
         if t["total"] in pivot1.index:
-            pivot1.loc[t["total"], t["percent_total"]] = "100,00%"
+            pivot1.loc[t["total"], t["percent_total"]] = "100.00%"
 
         # Pivot 2
         pivot2_count = df.pivot_table(
@@ -555,29 +531,14 @@ if st.button(t["analyze_excel"]):
             margins=True,
             margins_name=t["total"]
         )
-        pivot2_percent = pivot2_count.applymap(
-            lambda x: f"{(x / totale_numero_aziende * 100):.2f}".replace(".", ",") + "%")
-
-        # Ordine desiderato delle colonne (tradotte)
-        lpi_order_keys = ["Elevata evidenza", "Moderata evidenza", "Nessuna evidenza"]
-        lpi_order_translated = [excel_value_map["Late Payment Index"].get(k, {}).get(lang, k) for k in lpi_order_keys]
-
-        # Ricostruzione pivot2 con colonne ordinate e Totale/%
+        pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
         pivot2_combined = pd.DataFrame()
-
-        for col in lpi_order_translated:
-            if col in pivot2_count.columns:
-                pivot2_combined[col] = pivot2_count[col]
-                pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
-
-        # ➕ Aggiungi Totale (colonna) come penultima e % come ultima
-        if t["total"] in pivot2_count.columns:
-            pivot2_combined[t["total"]] = pivot2_count[t["total"]]
-            pivot2_combined[f"{t['total']} (%)"] = pivot2_percent[t["total"]]
-
-        # ➕ Se presente la riga Totale, forza 100,00%
+        for col in pivot2_count.columns:
+            pivot2_combined[col] = pivot2_count[col]
+            pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
         if t["total"] in pivot2_combined.index:
-            pivot2_combined.loc[t["total"], f"{t['total']} (%)"] = "100,00%"
+            for col in pivot2_count.columns:
+                pivot2_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
 
         # Pivot 3
         pivot3_count = df.pivot_table(
@@ -589,16 +550,14 @@ if st.button(t["analyze_excel"]):
             margins=True,
             margins_name=t["total"]
         )
-        pivot3_percent = pivot3_count.applymap(lambda x: f"{(x / totale_numero_aziende * 100):.2f}".replace(".", ",") + "%")
+        pivot3_percent = pivot3_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
         pivot3_combined = pd.DataFrame()
         for col in pivot3_count.columns:
             pivot3_combined[col] = pivot3_count[col]
             pivot3_combined[f"{col} (%)"] = pivot3_percent[col]
         if t["total"] in pivot3_combined.index:
             for col in pivot3_count.columns:
-                valore = pivot3_combined.loc[t["total"], col]
-                percentuale = (valore / totale_numero_aziende * 100)
-                pivot3_combined.loc[t["total"], f"{col} (%)"] = f"{percentuale:.2f}".replace(".", ",") + "%"
+                pivot3_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
 
         # Pivot 4
         pivot4 = df.pivot_table(
@@ -657,9 +616,7 @@ if st.button(t["analyze_excel"]):
         ]
 
         st.dataframe(casi_critici[colonne_output])
-        from xlsxwriter.utility import xl_col_to_name
 
-        # Accesso al workbook e worksheet
         # Output Excel con fogli tradotti
         output_excel = io.BytesIO()
         with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
@@ -668,53 +625,6 @@ if st.button(t["analyze_excel"]):
             pivot3_combined.to_excel(writer, sheet_name=sheet_map["pivot3"])
             pivot4.to_excel(writer, sheet_name=sheet_map["pivot4"])
             casi_critici[colonne_output].to_excel(writer, sheet_name=sheet_map["casi_critici"], index=False)
-
-            # 💡 Inserisci la formattazione qui dentro!
-            workbook = writer.book
-
-            # Mappa dei colori rischio
-            rischio_colori = {
-                "1-Molto Basso": "#479D72",
-                "2-Basso": "#99CC40",
-                "3-Medio Basso": "#81EC85",
-                "4-Medio Alto": "#D4F1A5",
-                "5-Alto": "#FF9900",
-                "6-Molto Alto": "#FF0000",
-            }
-
-            from xlsxwriter.utility import xl_col_to_name
-
-
-            # Funzione che colora la colonna "Livello Rischio" se presente
-            def colora_colonna_rischio(df_sorgente, nome_foglio):
-                if col_map["Livello Rischio"] not in df_sorgente.columns:
-                    return
-                col_index = list(df_sorgente.columns).index(col_map["Livello Rischio"])
-                col_letter = xl_col_to_name(col_index)
-                worksheet = writer.sheets[nome_foglio]
-
-                for rischio_codice, colore in rischio_colori.items():
-                    localizzato = excel_value_map["Livello Rischio"].get(rischio_codice, {}).get(lang)
-                    if localizzato:
-                        formato = workbook.add_format({"bg_color": colore})
-                        worksheet.conditional_format(
-                            f"{col_letter}2:{col_letter}1000",
-                            {
-                                "type": "cell",
-                                "criteria": "==",
-                                "value": f'"{localizzato}"',
-                                "format": formato,
-                            }
-                        )
-
-
-            # Applica la colorazione a tutti i fogli
-            colora_colonna_rischio(pivot1.reset_index(), sheet_map["pivot1"])
-            colora_colonna_rischio(pivot2_combined.reset_index(), sheet_map["pivot2"])
-            colora_colonna_rischio(pivot3_combined.reset_index(), sheet_map["pivot3"])
-            colora_colonna_rischio(pivot4.reset_index(), sheet_map["pivot4"])
-            colora_colonna_rischio(casi_critici[colonne_output], sheet_map["casi_critici"])
-
         output_excel.seek(0)
 
         st.download_button(
