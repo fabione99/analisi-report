@@ -275,16 +275,21 @@ excel_value_map = {
         }
     },
     "Late Payment Index": {
-        "Moderata evidenza": {
-            "Italiano": "Moderata evidenza",
-            "English": "Keep track",
-            "Español": "Cierta información negativa"
-        },
-        "Elevata evidenza": {
-            "Italiano": "Elevata evidenza",
-            "English": "Warning",
-            "Español": "Información negativa considerable"
-        }
+    "Moderata evidenza": {
+        "Italiano": "Moderata evidenza",
+        "English": "Keep track",
+        "Español": "Cierta información negativa"
+    },
+    "Elevata evidenza": {
+        "Italiano": "Elevata evidenza",
+        "English": "Warning",
+        "Español": "Información negativa considerable"
+    },
+    "Nessuna evidenza": {
+        "Italiano": "Nessuna evidenza",
+        "English": "No negative payment",
+        "Español": "Sin información negativa en pagos"
+    }
     },
     "Tipo Valutazione": {
         "2-Medio Intervento Umano": {
@@ -504,7 +509,6 @@ if st.button(t['analyze']):
         st.error(t['upload_prompt'])
 
 # --- STREAMLIT EXCEL ---
-# --- STREAMLIT EXCEL ---
 
 st.title(t["excel_title"])
 excel_file = st.file_uploader(t["upload_excel"], type=["xlsx"], key="excel_uploader")
@@ -552,13 +556,21 @@ if st.button(t["analyze_excel"]):
             margins_name=t["total"]
         )
         pivot2_percent = pivot2_count.apply(lambda x: (x / totale_numero_aziende * 100).round(2).astype(str) + "%")
+        # Ricostruisci pivot2_combined con ordine corretto delle colonne
+        lpi_order_keys = ["Elevata evidenza", "Moderata evidenza", "Nessuna evidenza"]
+        lpi_order_translated = [excel_value_map["Late Payment Index"].get(k, {}).get(lang, k) for k in lpi_order_keys]
         pivot2_combined = pd.DataFrame()
-        for col in pivot2_count.columns:
-            pivot2_combined[col] = pivot2_count[col]
-            pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
-        if t["total"] in pivot2_combined.index:
-            for col in pivot2_count.columns:
-                pivot2_combined.loc[t["total"], f"{col} (%)"] = "100.00%"
+
+        for col in lpi_order_translated:
+            if col in pivot2_count.columns:
+                pivot2_combined[col] = pivot2_count[col]
+                pivot2_combined[f"{col} (%)"] = pivot2_percent[col]
+
+        # Aggiungi Totale alla fine se esiste
+        if t["total"] in pivot2_count.index:
+            if t["total"] in pivot2_count.columns:
+                pivot2_combined[t["total"]] = pivot2_count[t["total"]]
+                pivot2_combined[f"{t['total']} (%)"] = pivot2_percent[t["total"]]
 
         # Pivot 3
         pivot3_count = df.pivot_table(
